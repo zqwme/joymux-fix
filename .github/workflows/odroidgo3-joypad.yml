@@ -6,7 +6,8 @@ on:
       dtb_path:
         description: "Path to DTB in repo (e.g. dtbs/og3/odroidgo3.dtb)"
         required: true
-        default: "rk3326-xgb36-linux-ywz.dtb"
+#        default: "rk3326-xgb36-linux-ywz.dtb"
+        default: "rk3326-xgb36-linux.dtb"
       amux_map:
         description: "Permutation: LX,LY,RY,RX | Absolute: abs:RX,RY,LY,LX | or 'unchanged'"
         required: true
