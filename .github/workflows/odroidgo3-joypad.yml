@@ -1,0 +1,85 @@
+name: Patch ONE odroidgo3-joypad DTB
+
+on:
+  workflow_dispatch:
+    inputs:
+      dtb_path:
+        description: "Path to DTB in repo (e.g. dtbs/og3/odroidgo3.dtb)"
+        required: true
+        default: "rk3326-xgb36-linux-ywz.dtb"
+      amux_map:
+        description: "Permutation: LX,LY,RY,RX | Absolute: abs:RX,RY,LY,LX | or 'unchanged'"
+        required: true
+        default: "unchanged"
+      invert_axes:
+        description: "Use 'unchanged' OR CSV with lx,ly,rx,ry (e.g. lx,rx)"
+        required: true
+#        default: "unchanged"
+        default: "ly,ry"
+      tuning:
+        description: "One number for all (e.g. 200) OR 8 CSV: x+,x-,y+,y-,rx+,rx-,ry+,ry-"
+        required: true
+        default: "200"
+
+permissions:
+  contents: read
+
+jobs:
+  patch_one:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check script & DTB exist
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ ! -f tools/patch_og3_joypad.py ]; then
+            echo "tools/patch_og3_joypad.py not found." >&2; exit 1
+          fi
+          if [ ! -f "${{ github.event.inputs.dtb_path }}" ]; then
+            echo "DTB not found: ${{ github.event.inputs.dtb_path }}" >&2
+            {
+              echo "### ❌ DTB not found"
+              echo ""
+              echo "Input: \`${{ github.event.inputs.dtb_path }}\`"
+              echo ""
+              echo "Some DTBs detected:"
+              echo ""
+              echo '```'
+              find . -type f -name "*.dtb" -printf "%P\n" | head -n 200
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: Install dtc
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y device-tree-compiler
+
+      - name: Patch DTB
+        id: patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/patch_og3_joypad.py \
+            --in_dtb "${{ github.event.inputs.dtb_path }}" \
+            --amux_csv "${{ github.event.inputs.amux_map }}" \
+            --invert_csv "${{ github.event.inputs.invert_axes }}" \
+            --tuning_str "${{ github.event.inputs.tuning }}"
+
+          # Keep only a single DTB, same basename as input
+          in_base="$(basename "${{ github.event.inputs.dtb_path }}")"
+          mv patched.dtb "${in_base}"
+
+          echo "outfile=${in_base}" >> "$GITHUB_OUTPUT"
+          echo "base=${in_base}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload patched DTB only
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.patch.outputs.base }}          # artifact name = dtb filename
+          path: ${{ steps.patch.outputs.outfile }}       # single file only
+          compression-level: 0                           # no compression (still a zip container)
+          retention-days: 1
